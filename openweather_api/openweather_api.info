@@ -1,0 +1,4 @@
+name = Openweather API
+description = Shows weather information for configured default location
+package = Custom
+core = 7.x

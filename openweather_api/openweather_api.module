@@ -1,0 +1,121 @@
+<?php
+
+/**
+ * @file
+ * Module file for openweather_api.
+ */
+
+/**
+ * Implements hook_permission().
+ */
+function openweather_api_permission() {
+  return array(
+    'access weather page' => array(
+      'title' => t('Access weather page'),
+      'description' => t('Allow users to access weather page'),
+    ),
+    'access weather settings page' => array(
+      'title' => t('Access weather settings page'),
+      'description' => t('Allow users to access weather settings page'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function openweather_api_menu() {
+  $items['admin/config/services/weather'] = array(
+    'title' => 'Openweather API Config',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('openweather_api_admin_form'),
+    'access arguments' => array('access weather settings page'),
+    'type' => MENU_NORMAL_ITEM,
+    'file' => 'openweather_api.admin.inc',
+  );
+	
+  $items['weather'] = array(
+    'title' => 'Weather',
+    'page callback' => 'openweather_api_weather_location',
+	'access arguments' => array('access weather page'),
+	'type' => MENU_NORMAL_ITEM
+  );
+
+  $items['weather/%/%'] = array(
+    'title' => 'Weather',
+    'page callback' => 'openweather_api_weather_location',
+    'page arguments' => array(1, 2),
+    'access arguments' => array('access weather page'),
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+function openweather_api_weather_location($city = null, $country_code = null) {
+	if ($city === null){
+		$city = variable_get('openweather_api_city_name', '');
+	}
+	if ($country_code === null){
+		$country_code = variable_get('openweather_api_city_name', '');
+	}
+	$endpoint = variable_get('openweather_api_endpoint', '');
+	$key = variable_get('openweather_api_key', '');
+	
+	$vars = array(
+		'{$city}'       	=> urlencode($city),
+		'{$country_code}'   => $country_code,
+		'{$key}'			=> $key
+	);
+
+	$url = strtr($endpoint, $vars);
+
+	$response = openweather_api_get_weather($url);
+	if ($response->code <> 200) {
+		drupal_set_message(t('Error! Invalid server response code: ' . $response->code), 'error');
+		return '';
+	}
+
+	$data = json_decode($response->data);
+	if (!empty($data)) {
+		return openweather_api_theme_weather($data);
+	}else{
+		drupal_set_message(t('Error! Invalid server response data.'), 'error');
+		return '';
+	}
+}
+
+function openweather_api_get_weather($url){
+	try {
+		$response = drupal_http_request($url);
+	}
+	catch (Exception $e) {
+		throw new Exception('Unable to make http request.');
+	}
+	
+	return $response;
+}
+
+function openweather_api_theme() {
+	return array(
+		'weather' => array(
+			'template' => 'openweather_api',
+		),
+	);
+}
+
+function openweather_api_theme_weather($data){
+	$theme_weather = theme('weather', array(
+		'city' 			=> $data->name,
+		'country_code'  => $data->sys->country,
+		'icon' 			=> $data->weather[0]->icon,
+		'weather' 		=> $data->weather[0]->main,
+		'desc' 			=> $data->weather[0]->description,
+		'temp' 			=> $data->main->temp,
+		'wind' 			=> $data->wind->speed,
+		'hum' 			=> $data->main->humidity,
+		'press' 		=> $data->main->pressure,
+	));
+
+	return $theme_weather;
+}
